@@ -45,7 +45,7 @@ export type WsSubscribe = (fn: (m: WsMessage) => void) => () => void
 // applies a preset without a custom km/h.
 const MODE_DEFAULT_KMH: Record<MoveMode, number> = {
   [MoveMode.Walking]: 10.8,
-  [MoveMode.Running]: 19.8,
+  [MoveMode.Running]: 19.5,
   [MoveMode.Driving]: 60,
 }
 

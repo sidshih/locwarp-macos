@@ -1,3 +1,8 @@
+> **Unofficial experimental macOS port.** This branch is based on keezxc1223/locwarp v0.2.202.
+> See [macOS instructions](README-macOS.md) and [validation scope](docs/macos-v0.2.202-verification.md).
+> Default macOS mode supports one USB device; Wi-Fi is disabled by default while saved preferences are retained.
+> The upstream Windows documentation follows below. Original MIT license and copyright are preserved.
+
 # LocWarp
 
 **A Windows tool that controls the GPS location of an iPhone or iPad.** No jailbreak. Works over USB or Wi-Fi, with Teleport, Navigate, Multi-point Route, Flower Farmer circling, Random Walk, and Joystick modes, and can drive up to three devices at once.

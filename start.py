@@ -11,6 +11,7 @@ import shutil
 import webbrowser
 import urllib.request
 import socket
+import signal
 
 # 路徑設定
 ROOT = os.path.dirname(os.path.abspath(__file__))
@@ -26,7 +27,7 @@ procs = []
 def print_banner():
     print()
     print("  ╔══════════════════════════════════════════╗")
-    print("  ║   LocWarp — iOS 虛擬定位模擬器 v0.1     ║")
+    print("  ║   LocWarp — iOS 虛擬定位模擬器 v0.2.202 ║")
     print("  ╚══════════════════════════════════════════╝")
     print()
 
@@ -82,16 +83,19 @@ def install_backend():
     req = os.path.join(BACKEND, "requirements.txt")
 
     dry = subprocess.run(
-        [sys.executable, "-m", "pip", "install", "-r", req, "--dry-run", "-q"],
+        [sys.executable, "-m", "pip", "install", "-r", req, "--dry-run"],
         capture_output=True, text=True,
     )
 
+    if dry.returncode != 0:
+        raise RuntimeError(dry.stderr or "Dependency check failed")
     if "would install" not in dry.stdout.lower():
         print("已就緒 ✓")
     else:
         print("安裝中...")
         subprocess.run(
             [sys.executable, "-m", "pip", "install", "-r", req, "-q"],
+            check=True,
             cwd=BACKEND,
         )
         print("        完成 ✓")
@@ -104,7 +108,7 @@ def install_frontend():
         print("已就緒 ✓")
     else:
         print("安裝中...")
-        subprocess.run(["npm", "install"], cwd=FRONTEND, shell=True)
+        subprocess.run(["npm", "ci"], cwd=FRONTEND, shell=os.name == "nt", check=True)
         print("        完成 ✓")
 
 
@@ -114,6 +118,8 @@ def start_backend():
     # 清理殘留
     if is_port_open(BACKEND_PORT):
         print(f"      Port {BACKEND_PORT} 被佔用，清理中...")
+        if os.name != "nt":
+            raise RuntimeError(f"Port {BACKEND_PORT} is already occupied; stop the existing backend first")
         kill_port(BACKEND_PORT)
         time.sleep(1)
 
@@ -121,6 +127,7 @@ def start_backend():
         [sys.executable, "main.py"],
         cwd=BACKEND,
         creationflags=subprocess.CREATE_NEW_PROCESS_GROUP if os.name == "nt" else 0,
+        start_new_session=os.name != "nt",
     )
     procs.append(p)
     return wait_for_port(BACKEND_PORT, "後端")
@@ -132,15 +139,19 @@ def start_frontend():
     # 清理殘留
     if is_port_open(FRONTEND_PORT):
         print(f"      Port {FRONTEND_PORT} 被佔用，清理中...")
+        if os.name != "nt":
+            raise RuntimeError(f"Port {FRONTEND_PORT} is already occupied; stop the existing frontend first")
         kill_port(FRONTEND_PORT)
         time.sleep(1)
 
     # 用 --port 強制指定 port，避免 Vite 跳到其他 port
     p = subprocess.Popen(
-        ["npx", "vite", "--host", "--port", str(FRONTEND_PORT), "--strictPort"],
+        ["npx", "vite", "--host", "0.0.0.0" if os.name == "nt" else "127.0.0.1",
+         "--port", str(FRONTEND_PORT), "--strictPort"],
         cwd=FRONTEND,
-        shell=True,
+        shell=os.name == "nt",
         creationflags=subprocess.CREATE_NEW_PROCESS_GROUP if os.name == "nt" else 0,
+        start_new_session=os.name != "nt",
     )
     procs.append(p)
     return wait_for_port(FRONTEND_PORT, "前端")
@@ -150,6 +161,35 @@ def cleanup():
     print("\n  正在關閉所有服務...")
     for p in procs:
         try:
+            if os.name != "nt":
+                # Each launched service owns a separate process group. This
+                # also works where the OS forbids enumerating descendants.
+                try:
+                    os.killpg(p.pid, signal.SIGTERM)
+                except ProcessLookupError:
+                    pass
+                p.wait(timeout=5)
+                try:
+                    os.killpg(p.pid, signal.SIGKILL)
+                except ProcessLookupError:
+                    pass
+                continue
+            import psutil
+            try:
+                children = psutil.Process(p.pid).children(recursive=True)
+            except psutil.NoSuchProcess:
+                children = []
+            for child in children:
+                try:
+                    child.terminate()
+                except psutil.NoSuchProcess:
+                    pass
+            _, alive = psutil.wait_procs(children, timeout=3)
+            for child in alive:
+                try:
+                    child.kill()
+                except psutil.NoSuchProcess:
+                    pass
             p.terminate()
             p.wait(timeout=5)
         except Exception:
@@ -173,8 +213,13 @@ def check_admin():
 
 
 def main():
-    os.system("title LocWarp")
+    if os.name == "nt":
+        os.system("title LocWarp")
     print_banner()
+    from upgrade_settings import backup_settings
+    backup = backup_settings()
+    if backup:
+        print(f"  設定備份：{backup}")
 
     # 檢查管理員權限 (iOS 17+ 需要)
     if os.name == "nt" and not check_admin():
@@ -185,7 +230,7 @@ def main():
 
     # 檢查環境
     ok = True
-    ok = check_tool("python", "https://www.python.org/downloads/") and ok
+    ok = check_tool("python" if os.name == "nt" else "python3", "https://www.python.org/downloads/") and ok
     ok = check_tool("node", "https://nodejs.org/") and ok
     ok = check_tool("npm", "隨 Node.js 一起安裝") and ok
     print()
@@ -244,3 +289,6 @@ if __name__ == "__main__":
         main()
     except KeyboardInterrupt:
         cleanup()
+    except Exception:
+        cleanup()
+        raise

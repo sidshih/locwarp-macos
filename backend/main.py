@@ -1,3 +1,4 @@
+from core.platform_support import connection_transport_closed
 import asyncio
 import json
 import logging
@@ -390,8 +391,14 @@ async def _usbmux_presence_watchdog():
             # _connections so whichever case was stored in those maps
             # is what we use for look-ups.
             lost_now: list[str] = []
+            transport_lost: list[str] = []
             for udid_lc in connected:
-                if udid_lc in present_usb:
+                conn = dm._connections.get(connected_original[udid_lc])
+                if conn is not None and connection_transport_closed(conn):
+                    transport_lost.append(connected_original[udid_lc])
+                    logger.warning("USB tunnel transport closed: %s", connected_original[udid_lc])
+                    lost_now.append(connected_original[udid_lc])
+                elif udid_lc in present_usb:
                     miss_counts.pop(udid_lc, None)
                 else:
                     miss_counts[udid_lc] = miss_counts.get(udid_lc, 0) + 1
@@ -399,7 +406,7 @@ async def _usbmux_presence_watchdog():
                         lost_now.append(connected_original[udid_lc])
 
             if lost_now:
-                logger.warning("usbmux watchdog: device(s) gone → %s", lost_now)
+                logger.warning("usbmux watchdog: device(s) unavailable → %s", lost_now)
                 # If the leader is among the lost devices, capture its
                 # snapshot BEFORE we cancel its task so we can hand the
                 # in-flight sim off to whichever follower we promote.
@@ -501,7 +508,8 @@ async def _usbmux_presence_watchdog():
                 try:
                     await broadcast("device_disconnected", {
                         "udids": lost_now,
-                        "reason": "usb_unplugged",
+                        "reason": "usb_tunnel_closed" if transport_lost else "usb_unplugged",
+                        "transport_lost": transport_lost,
                         # Remaining connected count AFTER cleanup. Frontend
                         # suppresses the full-screen banner when > 0 since
                         # the other device(s) are still usable; only the
@@ -517,7 +525,7 @@ async def _usbmux_presence_watchdog():
             # device cap. The user environment is assumed to only ever have
             # their own iPhones plugged in.
             MAX_DEVICES = 3
-            new_udids_lc = present_usb - connected
+            new_udids_lc = present_usb - {u.lower() for u in dm._connections}
             if not new_udids_lc or len(connected) >= MAX_DEVICES:
                 continue
             # Map back to the original-case serials from list_devices so
@@ -722,7 +730,7 @@ app.include_router(phone_router)
 async def root():
     return {
         "name": "LocWarp",
-        "version": "0.1.0",
+        "version": "0.2.202-macos.1",
         "status": "running",
         "initial_position": app_state.get_initial_position(),
     }

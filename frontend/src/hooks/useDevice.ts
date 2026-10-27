@@ -1,6 +1,6 @@
 import { useState, useCallback, useEffect, useRef } from 'react'
 import {
-  listDevices, connectDevice, disconnectDevice,
+  listDevices, connectDevice, disconnectDevice, platformCapabilities,
   wifiConnect, wifiScan,
   wifiTunnelStartAndConnect, wifiTunnelStatus, wifiTunnelStop,
   type TunnelInfo,
@@ -267,6 +267,7 @@ export function useDevice(subscribe?: WsSubscribe) {
     if (pinRetryTimers.current[udid]) return // already scheduled
     const attempt = async () => {
       delete pinRetryTimers.current[udid]
+      try { if (!(await platformCapabilities()).wifi_enabled) return } catch { return }
       // Stop if the user unpinned, or the tunnel already came back.
       if (!pinnedRef.current.includes(udid)) return
       if (tunnelsRef.current.some((tn) => tn.udid === udid)) return

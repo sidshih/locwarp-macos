@@ -74,3 +74,12 @@ async def open_log_folder():
         raise HTTPException(status_code=500, detail={"code": "open_log_failed",
                                                      "message": f"無法開啟資料夾:{exc}"})
     return {"status": "opened", "path": str(log_dir)}
+
+
+@router.get("/platform")
+async def platform_capabilities():
+    from core.platform_support import use_userspace_tunnel
+    usb_mode = use_userspace_tunnel()
+    return {"platform": sys.platform, "wifi_enabled": not usb_mode,
+            "tunnel_mode": "userspace" if usb_mode else "kernel",
+            "max_tunnel_devices": 1 if usb_mode else 3}

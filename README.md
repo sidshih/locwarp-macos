@@ -1,4 +1,28 @@
-# LocWarp
+# LocWarp — 非官方 macOS 移植版
+
+本分支基於 [keezxc1223/locwarp](https://github.com/keezxc1223/locwarp) 的
+[`v0.2.202`](https://github.com/keezxc1223/locwarp/releases/tag/v0.2.202)。
+**這是非官方、實驗性的 macOS 移植，並非原作者發布或背書的版本。**
+
+- 啟動方式：`LocWarp.command`；Python 3.13、Node.js 24。
+- macOS 預設單台 iPhone USB；iOS 17.4+ 使用免管理員 userspace tunnel。
+- WiFi 自動連線暫停，既有 WiFi 設定保留；kernel/WiFi/多裝置尚未驗證。
+- 腳踏車預設 19.5 km/h；保留既有自訂速度。
+- 首次執行前備份後端設定，瀏覽器仍使用 `http://localhost:5173`。
+
+請先閱讀 [macOS 安裝與升級](README-macOS.md)、
+[驗證範圍](docs/macos-v0.2.202-verification.md) 與 [版本維護方式](docs/macos-maintenance.md)。
+使用者於 2026-10-18 回報此版在其 Mac/iPhone 環境正常使用；這不等於所有機型或長時間穩定性已驗證。
+
+## 來源與授權
+
+原專案：keezxc1223/locwarp，Copyright (c) 2026 keezxc1223。
+保留原始 [MIT License](LICENSE)，本分支的移植修改亦以 MIT 授權提供。
+第三方依賴仍適用各自授權；若發布包含依賴的 App，須另附相關第三方授權聲明。
+
+## 上游 Windows 文件
+
+以下保留上游說明；Windows 的安裝檔、管理員權限與 WiFi 說明不直接代表本分支的 macOS 支援範圍。
 
 **在 Windows 上控制 iPhone / iPad GPS 定位的虛擬定位工具。** 免越獄,透過 USB 或 WiFi 連線,支援瞬移、導航、多點路徑、花農繞圈、隨機漫步與搖桿操作,最多可同時控制三台裝置。
 

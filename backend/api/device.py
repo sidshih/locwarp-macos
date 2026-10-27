@@ -1,3 +1,4 @@
+from core.platform_support import require_wifi_mode
 from fastapi import APIRouter, HTTPException
 from pydantic import BaseModel
 
@@ -38,6 +39,7 @@ class WifiTunnelConnectRequest(BaseModel):
 
 @router.post("/wifi/tunnel")
 async def wifi_tunnel_connect(req: WifiTunnelConnectRequest):
+    require_wifi_mode()
     """Connect to a device via an existing WiFi tunnel (RSD address/port)."""
     from main import app_state
     from core.device_manager import UnsupportedIosVersionError
@@ -112,6 +114,7 @@ _tunnels_lock = asyncio.Lock()
 
 @router.post("/wifi/repair")
 async def wifi_repair():
+    require_wifi_mode()
     """Regenerate the RemotePairing pair record (~/.pymobiledevice3/) using a
     currently-attached USB device. The iPhone will show a 'Trust This Computer'
     prompt the first time; after the user taps 信任, a fresh RemotePairing
@@ -260,7 +263,7 @@ async def wifi_repair():
                     pass
             try:
                 if proxy is not None:
-                    proxy.close()
+                    await proxy.close()
             except Exception:
                 pass
 
@@ -977,6 +980,7 @@ def _build_tunnel_port_candidates(req: WifiTunnelStartRequest) -> list[int]:
 
 @router.post("/wifi/tunnel/start")
 async def wifi_tunnel_start(req: WifiTunnelStartRequest):
+    require_wifi_mode()
     """Start an in-process WiFi tunnel for one device (requires admin).
 
     The runner is keyed in _tunnels by the actual udid once we resolve
@@ -1274,6 +1278,7 @@ async def wifi_tunnel_stop(req: WifiTunnelStopRequest | None = None):
 
 @router.post("/wifi/tunnel/start-and-connect")
 async def wifi_tunnel_start_and_connect(req: WifiTunnelStartRequest):
+    require_wifi_mode()
     """Start a WiFi tunnel and immediately connect the device through it.
 
     Re-keys the runner from any temporary IP-based key to the real udid

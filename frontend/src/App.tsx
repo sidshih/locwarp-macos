@@ -46,7 +46,7 @@ import { SimMode, MoveMode } from './hooks/useSimulation'
 
 const SPEED_MAP: Record<MoveMode, number> = {
   walking: 10.8,
-  running: 19.8,
+  running: 19.5,
   driving: 60,
 }
 
@@ -429,6 +429,7 @@ const App: React.FC = () => {
           // Skip if a device is already connected (USB plug, or backend
           // already brought a tunnel back up via its own restart logic).
           if (device.connectedDevices.length > 0) return
+          if (!(await api.platformCapabilities()).wifi_enabled) return
           const status = await api.wifiTunnelStatus()
           const alreadyTunneled = new Set(
             (status?.tunnels || [])
@@ -1430,7 +1431,7 @@ const App: React.FC = () => {
     const rounds = Math.max(1, Math.round(sim.flowerRounds))
     const preW = Math.max(0, sim.flowerPreWait)
     const postW = Math.max(0, sim.flowerPostWait)
-    const defKmh = sim.moveMode === MoveMode.Running ? 19.8 : sim.moveMode === MoveMode.Driving ? 60 : 10.8
+    const defKmh = sim.moveMode === MoveMode.Running ? 19.5 : sim.moveMode === MoveMode.Driving ? 60 : 10.8
     const kmh = (sim.speedMinKmh != null && sim.speedMaxKmh != null)
       ? (sim.speedMinKmh + sim.speedMaxKmh) / 2
       : (sim.customSpeedKmh ?? defKmh)
@@ -1609,7 +1610,7 @@ const App: React.FC = () => {
           onModeChange={sim.setMode}
           onSpeedChange={(s: number) => {
             if (s <= 10.8) sim.setMoveMode(MoveMode.Walking)
-            else if (s <= 19.8) sim.setMoveMode(MoveMode.Running)
+            else if (s <= 19.5) sim.setMoveMode(MoveMode.Running)
             else sim.setMoveMode(MoveMode.Driving)
           }}
           onMoveModeChange={sim.setMoveMode}

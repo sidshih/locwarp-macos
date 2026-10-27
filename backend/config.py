@@ -1,6 +1,11 @@
 from pathlib import Path
 from typing import TypedDict
 
+import sys
+if sys.platform == "darwin":
+    from services.macos_upgrade import backup_settings
+    backup_settings()
+
 # Paths
 DATA_DIR = Path.home() / ".locwarp"
 DATA_DIR.mkdir(exist_ok=True)
@@ -55,13 +60,13 @@ class SpeedProfile(TypedDict):
 
 
 # Speed profiles (m/s). Defaults align with the frontend ControlPanel
-# preset chips (10.8 / 19.8 / 60 km/h). v0.2.84 lifted these from the
+# preset chips (10.8 / 19.5 / 60 km/h). v0.2.84 lifted these from the
 # v0.1.0 numbers (1.4 / 2.8 / 11.1) which dated from when "running" still
 # meant actual running; the i18n label was later renamed to 腳踏車 and
 # the chip value bumped to bike speed without touching the backend.
 SPEED_PROFILES: dict[str, SpeedProfile] = {
     "walking": {"speed_mps": 3.0, "jitter": 0.5, "update_interval": 1.0},
-    "running": {"speed_mps": 5.5, "jitter": 0.7, "update_interval": 0.5},
+    "running": {"speed_mps": 19.5 / 3.6, "jitter": 0.7, "update_interval": 0.5},
     "driving": {"speed_mps": 16.7, "jitter": 1.2, "update_interval": 0.5},
 }
 

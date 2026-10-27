@@ -26,6 +26,7 @@ from typing import Dict, Optional
 from pymobiledevice3.lockdown import create_using_usbmux, create_using_tcp
 from pymobiledevice3.remote.remote_service_discovery import RemoteServiceDiscoveryService
 from pymobiledevice3.remote.tunnel_service import CoreDeviceTunnelProxy
+from core.platform_support import use_userspace_tunnel, lockdown_directory, connection_transport_closed
 from pymobiledevice3.services.dvt.instruments.dvt_provider import DvtProvider
 from pymobiledevice3.services.dvt.instruments.location_simulation import LocationSimulation
 from pymobiledevice3.services.simulate_location import DtSimulateLocation
@@ -242,9 +243,16 @@ class DeviceManager:
         * **iOS 16.x** -- plain lockdown over usbmux + legacy location service.
         """
         async with self._lock:
-            if udid in self._connections:
+            existing = self._connections.get(udid)
+            if existing is not None and not connection_transport_closed(existing):
                 logger.info("Device %s is already connected", udid)
                 return
+        if existing is not None:
+            logger.warning("Replacing closed USB tunnel for %s", udid)
+            await self.disconnect(udid)
+
+        if use_userspace_tunnel() and self._connections:
+            raise RuntimeError("macOS USB 模式一次支援一台 iPhone，請先中斷目前裝置。")
 
         # Detect connection type from usbmux device list.
         connection_type = "USB"
@@ -259,6 +267,8 @@ class DeviceManager:
         except Exception:
             logger.debug("Could not determine connection type for %s, assuming USB", udid)
 
+        if use_userspace_tunnel() and connection_type != "USB":
+            raise RuntimeError("目前為 macOS USB 模式，請以 USB 線連接 iPhone。")
         logger.info("Connecting to %s via %s", udid, connection_type)
 
         # Create a fresh lockdown client to read the iOS version.
@@ -300,6 +310,28 @@ class DeviceManager:
         """TCP tunnel for iOS 17+ using CoreDeviceTunnelProxy + RSD."""
         logger.debug("Establishing TCP tunnel for %s (iOS %s)", udid, ios_version)
 
+        if use_userspace_tunnel():
+            from pymobiledevice3.remote.userspace_tunnel import UserspaceRsdTunnel
+            # Explicit serial; never select an arbitrary paired iPhone. No bonjour
+            # fallback: a USB connection must not silently become Wi-Fi.
+            if _parse_ios_version(ios_version) < (17, 4):
+                await lockdown.close()
+                raise RuntimeError("macOS 免管理員 USB 模式需要 iOS 17.4+；iOS 17.0–17.3 請使用 kernel 診斷模式。")
+            context = UserspaceRsdTunnel(serial=udid, remotepairing_fallback=False)
+            try:
+                rsd = await context.__aenter__()
+                return _ActiveConnection(
+                    udid=udid, lockdown=rsd, ios_version=ios_version,
+                    tunnel_context=context, rsd=rsd, usbmux_lockdown=lockdown,
+                )
+            except BaseException:
+                await context.aclose()
+                await lockdown.close()
+                raise
+
+        proxy = None
+        tunnel_ctx = None
+        rsd = None
         try:
             proxy = await CoreDeviceTunnelProxy.create(lockdown)
             tunnel_ctx = proxy.start_tcp_tunnel()
@@ -322,7 +354,16 @@ class DeviceManager:
                 rsd=rsd,
                 usbmux_lockdown=lockdown,
             )
-        except Exception:
+        except BaseException as exc:
+            if rsd is not None:
+                await rsd.close()
+            if tunnel_ctx is not None:
+                await tunnel_ctx.__aexit__(None, None, None)
+            if proxy is not None:
+                await proxy.close()
+            await lockdown.close()
+            if not isinstance(exc, Exception):
+                raise
             logger.exception(
                 "TCP tunnel failed for %s (iOS %s). "
                 "Ensure you are running as administrator.",
@@ -391,10 +432,15 @@ class DeviceManager:
         # Close tunnel proxy.
         if conn.tunnel_proxy is not None:
             try:
-                conn.tunnel_proxy.close()
+                await conn.tunnel_proxy.close()
             except Exception:
                 logger.exception("Error closing tunnel proxy for %s", udid)
 
+        if conn.usbmux_lockdown is not None:
+            try:
+                await conn.usbmux_lockdown.close()
+            except Exception:
+                logger.debug("Error closing USB lockdown for %s", udid, exc_info=True)
         logger.info("Disconnected device %s", udid)
 
     # ------------------------------------------------------------------
@@ -977,7 +1023,7 @@ def _load_pair_record(udid: str | None = None) -> dict | None:
     import os
     import plistlib
 
-    lockdown_dir = Path(os.environ.get("ALLUSERSPROFILE", "C:/ProgramData")) / "Apple" / "Lockdown"
+    lockdown_dir = lockdown_directory()
     if not lockdown_dir.exists():
         logger.debug("Apple Lockdown directory not found: %s", lockdown_dir)
         return None

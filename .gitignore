@@ -43,3 +43,23 @@ Thumbs.db
 S__*.png
 S__*.jpg
 _geoport/
+
+# ── Local credentials and personal device data ────────
+.env
+.env.*
+!.env.example
+.locwarp/
+.locwarp-backups/
+.pymobiledevice3/
+pair_records/
+remote_pair_records/
+*.p12
+*.pfx
+*.mobileprovision
+*.key
+*.pem
+macos-verification-*.log
+.pytest_cache/
+# Local release archives are attached to Releases, not committed.
+/LocWarp-*.zip
+/LocWarp-*.bundle

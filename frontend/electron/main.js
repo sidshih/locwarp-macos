@@ -189,6 +189,7 @@ const ipFallback = async () => {
 }
 
 const tryWindowsLocation = () => {
+  if (process.platform !== 'win32') return Promise.resolve({ ok: false, code: 'UNSUPPORTED_PLATFORM' })
   return new Promise((resolve) => {
     let settled = false
     const finish = (payload) => { if (!settled) { settled = true; resolve(payload) } }
@@ -273,7 +274,13 @@ ipcMain.handle('locate-pc', async () => {
 
 // Strip the default "File Edit View Window Help" menubar — LocWarp has its
 // own in-window controls and the native menu only adds noise on Windows.
-Menu.setApplicationMenu(null)
+if (process.platform === 'darwin') {
+  Menu.setApplicationMenu(Menu.buildFromTemplate([
+    { role: 'appMenu' }, { role: 'editMenu' }, { role: 'windowMenu' },
+  ]))
+} else {
+  Menu.setApplicationMenu(null)
+}
 
 let mainWindow
 let backendProc = null
@@ -283,7 +290,7 @@ function resolveBackendExe() {
   // (e.g.  .../resources/backend/locwarp-backend.exe).  In dev, we don't spawn;
   // the developer runs `python main.py` manually.
   if (app.isPackaged) {
-    return path.join(process.resourcesPath, 'backend', 'locwarp-backend.exe')
+    return path.join(process.resourcesPath, 'backend', process.platform === 'win32' ? 'locwarp-backend.exe' : 'locwarp-backend')
   }
   return null
 }
@@ -294,6 +301,13 @@ function resolveBackendExe() {
 // exception that says nothing about what to do. Show an actionable message and
 // offer to open the folder so the user can see for themselves it is gone.
 function showBackendMissingDialog(exe, detail) {
+  if (process.platform !== 'win32') {
+    dialog.showMessageBoxSync({ type: 'error', title: 'LocWarp 無法啟動',
+      message: '無法啟動背景服務，請重新建置或重新解壓縮程式。',
+      detail: exe + (detail ? '\n' + detail : '') })
+    app.quit()
+    return
+  }
   const zh = (app.getLocale() || '').toLowerCase().startsWith('zh')
   const msg = zh
     ? {
@@ -346,6 +360,7 @@ function showBackendMissingDialog(exe, detail) {
 }
 
 function startBackend() {
+  if (backendProc) return
   const exe = resolveBackendExe()
   if (!exe) return
   if (!fs.existsSync(exe)) {
@@ -490,8 +505,7 @@ async function createWindow() {
 
 app.whenReady().then(createWindow)
 app.on('window-all-closed', () => {
-  stopBackend()
-  if (process.platform !== 'darwin') app.quit()
+  if (process.platform !== 'darwin') { stopBackend(); app.quit() }
 })
 app.on('before-quit', stopBackend)
 app.on('activate', () => { if (BrowserWindow.getAllWindows().length === 0) createWindow() })

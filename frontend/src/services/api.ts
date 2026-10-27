@@ -426,3 +426,5 @@ export function exportAllRoutesUrl(): string {
 
 export const importAllRoutes = (data: { routes: any[]; categories?: any[] }) =>
   request<{ imported: number }>('POST', '/api/route/saved/import', data)
+
+export const platformCapabilities = () => request<{platform: string; wifi_enabled: boolean; tunnel_mode: string; max_tunnel_devices: number}>('GET', '/api/system/platform')
